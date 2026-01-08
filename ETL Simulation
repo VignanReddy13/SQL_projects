@@ -1,0 +1,75 @@
+CREATE TABLE raw_orders (
+    order_id INT,
+    customer_id INT,
+    order_date VARCHAR(20),
+    amount DECIMAL(10,2)
+);
+
+/* Insert dirty / raw data */
+INSERT INTO raw_orders VALUES
+(1, 101, '2025/01/01', 500),
+(1, 101, '2025/01/01', 500),   -- duplicate
+(2, NULL, '2025/01/02', 300),  -- null customer
+(3, 102, '2025/01/03', 700),
+(4, 103, '2025/01/04', 200),
+(4, 103, '2025/01/04', 200);   -- duplicate
+
+
+CREATE TABLE cleaned_orders (
+    order_id INT,
+    customer_id INT,
+    order_date DATE,
+    amount DECIMAL(10,2)
+);
+
+/* Clean data using CTE:
+   - Remove NULLs
+   - Remove duplicates
+   - Convert date format
+*/
+WITH cleaned_data AS (
+    SELECT DISTINCT
+        order_id,
+        customer_id,
+        STR_TO_DATE(order_date, '%Y/%m/%d') AS order_date,
+        amount
+    FROM raw_orders
+    WHERE customer_id IS NOT NULL
+)
+INSERT INTO cleaned_orders
+SELECT * FROM cleaned_data;
+
+
+CREATE TEMPORARY TABLE temp_high_value_orders AS
+SELECT *
+FROM cleaned_orders
+WHERE amount > 300;
+
+CREATE TABLE customer_sales_summary (
+    customer_id INT,
+    total_orders INT,
+    total_amount DECIMAL(10,2),
+    avg_order_value DECIMAL(10,2)
+);
+
+/* Aggregate data for analytics */
+INSERT INTO customer_sales_summary
+SELECT
+    customer_id,
+    COUNT(order_id) AS total_orders,
+    SUM(amount) AS total_amount,
+    AVG(amount) AS avg_order_value
+FROM cleaned_orders
+GROUP BY customer_id;
+
+-- Raw data
+SELECT * FROM raw_orders;
+
+-- Cleaned data
+SELECT * FROM cleaned_orders;
+
+-- Analytics data
+SELECT * FROM customer_sales_summary;
+
+-- Temporary table data
+SELECT * FROM temp_high_value_orders;
