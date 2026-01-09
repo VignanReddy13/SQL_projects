@@ -1,8 +1,3 @@
-/* ================================
-   DATA WAREHOUSE – STAR SCHEMA
-   SALES ANALYTICS PROJECT
-   ================================ */
-
 --  CREATE DATABASE
 CREATE DATABASE sales_dw;
 USE sales_dw;
