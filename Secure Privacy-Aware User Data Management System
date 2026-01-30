@@ -1,0 +1,128 @@
+-- ================================
+-- PRIVACY RELATED MYSQL PROJECT
+-- ================================
+
+DROP DATABASE IF EXISTS privacy_db;
+CREATE DATABASE privacy_db;
+USE privacy_db;
+
+-- ----------------
+-- ROLES TABLE
+-- ----------------
+CREATE TABLE roles (
+    role_id INT PRIMARY KEY,
+    role_name VARCHAR(20)
+);
+
+INSERT INTO roles VALUES
+(1,'admin'),
+(2,'user'),
+(3,'guest');
+
+-- ----------------
+-- USERS TABLE
+-- ----------------
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50),
+    password_hash VARCHAR(256),
+    email VARBINARY(255),
+    phone VARBINARY(255),
+    role_id INT,
+    FOREIGN KEY (role_id) REFERENCES roles(role_id)
+);
+
+-- ----------------
+-- ACCESS LOGS
+-- ----------------
+CREATE TABLE access_logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    action VARCHAR(100),
+    access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------
+-- INSERT SAMPLE USERS
+-- ----------------
+SET @key = 'my_secret_key';
+
+INSERT INTO users (username, password_hash, email, phone, role_id) VALUES
+('veda', SHA2('mypassword',256), AES_ENCRYPT('veda@gmail.com',@key), AES_ENCRYPT('9876543210',@key), 2),
+('admin1', SHA2('adminpass',256), AES_ENCRYPT('admin@gmail.com',@key), AES_ENCRYPT('9998887777',@key), 1),
+('guest1', SHA2('guestpass',256), AES_ENCRYPT('guest@gmail.com',@key), AES_ENCRYPT('8887776666',@key), 3);
+
+-- ----------------
+-- ADMIN VIEW (REAL DATA)
+-- ----------------
+CREATE VIEW admin_view AS
+SELECT 
+    id,
+    username,
+    CAST(AES_DECRYPT(email,@key) AS CHAR) AS email,
+    CAST(AES_DECRYPT(phone,@key) AS CHAR) AS phone,
+    role_id
+FROM users;
+
+-- ----------------
+-- GUEST VIEW (MASKED DATA)
+-- ----------------
+CREATE VIEW guest_view AS
+SELECT
+    id,
+    username,
+    CONCAT('XXXXXX', RIGHT(CAST(AES_DECRYPT(phone,@key) AS CHAR),4)) AS phone_masked,
+    'HIDDEN' AS email_hidden
+FROM users;
+
+-- ----------------
+-- TRIGGER FOR LOGGING ACCESS
+-- ----------------
+DELIMITER $$
+
+CREATE TRIGGER log_access
+AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+    INSERT INTO access_logs(user_id, action)
+    VALUES (NEW.id, 'User data modified');
+END$$
+
+DELIMITER ;
+
+-- ----------------
+-- STORED PROCEDURE FOR LOGIN
+-- ----------------
+DELIMITER $$
+
+CREATE PROCEDURE login_user(
+    IN uname VARCHAR(50),
+    IN pass VARCHAR(100)
+)
+BEGIN
+    SELECT id, username, role_id
+    FROM users
+    WHERE username = uname
+    AND password_hash = SHA2(pass,256);
+END$$
+
+DELIMITER ;
+
+-- ----------------
+-- TEST QUERIES
+-- ----------------
+
+-- Admin privacy view
+SELECT * FROM admin_view;
+
+-- Guest privacy view
+SELECT * FROM guest_view;
+
+-- Login test
+CALL login_user('veda','mypassword');
+
+-- Modify user (to trigger log)
+UPDATE users SET username='veda_ds' WHERE id=1;
+
+-- Check logs
+SELECT * FROM access_logs;
